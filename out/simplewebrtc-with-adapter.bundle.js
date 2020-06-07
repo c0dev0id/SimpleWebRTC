@@ -24262,7 +24262,7 @@ function SimpleWebRTC(opts) {
     var self = this;
     var options = opts || {};
     var config = this.config = {
-            url: 'https://sandbox.simplewebrtc.com:443/',
+            url: 'https://simple-signal-master.herokuapp.com/',
             socketio: {/* 'force new connection':true*/},
             connection: null,
             debug: false,
