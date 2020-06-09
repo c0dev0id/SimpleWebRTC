@@ -127,6 +127,8 @@ http://simplewebrtc.com/notsosimple.html for some examples.
   later with `startLocalVideo`
   - `bool enableDataChannels` *optional(=true)* option to enable/disable data
   channels (used for volume levels or direct messaging)
+  - `bool autoAttachStream` - *optional(=true)* option to automatically attach
+  media stream to dom element.
   - `bool autoRemoveVideos` - *optional(=true)* option to automatically remove
   video elements when streams are stopped.
   - `bool adjustPeerVolume` - *optional(=false)* option to reduce peer volume
@@ -217,6 +219,8 @@ same event
 `'localScreenAdded', el` - emitted after triggering the start of screen sharing
 
 - `el` the element that contains the local screen stream
+
+`'localMediaStream', stream` - emitted when local video stream is started
 
 `'joinedRoom', roomName` - emitted after successfully joining a room with the name roomName
 

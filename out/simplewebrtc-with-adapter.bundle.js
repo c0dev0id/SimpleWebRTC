@@ -24271,6 +24271,7 @@ function SimpleWebRTC(opts) {
             enableDataChannels: true,
             autoRequestMedia: false,
             autoRemoveVideos: true,
+            autoAttachStream: true,
             adjustPeerVolume: false,
             peerVolumeWhenSpeaking: 0.25,
             media: {
@@ -24449,17 +24450,21 @@ function SimpleWebRTC(opts) {
     // screensharing events
     this.webrtc.on('localScreen', function (stream) {
         var item,
-            el = document.createElement('video'),
-            container = self.getRemoteVideoContainer();
+            el = document.createElement('video');
 
         el.oncontextmenu = function () { return false; };
         el.id = 'localScreen';
-        attachMediaStream(stream, el);
-        if (container) {
-            container.appendChild(el);
+
+        if (self.config.autoAttachStream) {
+            attachMediaStream(stream, el);
+
+            var container = self.getRemoteVideoContainer();
+            if (container) {
+                container.appendChild(el);
+            }
         }
 
-        self.emit('localScreenAdded', el);
+        self.emit('localScreenAdded', el, stream);
         self.connection.emit('shareScreen');
 
         self.webrtc.peers.forEach(function (existingPeer) {
@@ -24532,16 +24537,22 @@ SimpleWebRTC.prototype.disconnect = function () {
 
 SimpleWebRTC.prototype.handlePeerStreamAdded = function (peer) {
     var self = this;
-    var container = this.getRemoteVideoContainer();
-    var video = attachMediaStream(peer.stream);
 
-    // store video element as part of peer for easy removal
-    peer.videoEl = video;
-    video.id = this.getDomId(peer);
+    if (self.config.autoAttachStream) {
+        var container = this.getRemoteVideoContainer();
+        var video = attachMediaStream(peer.stream);
 
-    if (container) container.appendChild(video);
+        // store video element as part of peer for easy removal
+        peer.videoEl = video;
+        video.id = this.getDomId(peer);
 
-    this.emit('videoAdded', video, peer);
+        if (container) container.appendChild(video);
+
+        this.emit('videoAdded', video, peer);
+    } else {
+        this.emit('videoAdded', null, peer);
+    }
+    
 
     // send our mute status to new peer if we're muted
     // currently called with a small delay because it arrives before
@@ -24628,7 +24639,11 @@ SimpleWebRTC.prototype.startLocalVideo = function () {
         if (err) {
             self.emit('localMediaError', err);
         } else {
-            attachMediaStream(stream, self.getLocalVideoContainer(), self.config.localVideo);
+            self.emit('localMediaStream', stream);
+
+            if (self.config.autoAttachStream) {
+                attachMediaStream(stream, self.getLocalVideoContainer(), self.config.localVideo);
+            }
         }
     });
 };
