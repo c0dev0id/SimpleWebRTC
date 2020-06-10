@@ -478,4 +478,17 @@ SimpleWebRTC.prototype.sendFile = function () {
 
 };
 
+SimpleWebRTC.prototype.getRoomParticipants = function (roomName, cb) {
+    var self = this;
+    this.connection.emit('getRoomParticipants', roomName, function (err, roomDescription) {
+        console.log('getRoomParticipants', roomName, err, roomDescription);
+        if (err) {
+            self.emit('error', err);
+        }
+
+        if (cb) cb(err, roomDescription);
+        self.emit('roomParticipants', name);
+    });
+};
+
 module.exports = SimpleWebRTC;
