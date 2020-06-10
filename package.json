@@ -1,9 +1,9 @@
 {
   "name": "simplewebrtc",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/andyet/SimpleWebRTC.git"
+    "url": "https://github.com/devcodeash/SimpleWebRTC.git"
   },
   "main": "./src/simplewebrtc.js",
   "description": "World's easiest webrtc",
@@ -43,8 +43,7 @@
     "test": "node test/selenium/index.js"
   },
   "pre-commit": [
-    "lint",
-    "validate"
+    "lint"
   ],
   "false": {}
 }
