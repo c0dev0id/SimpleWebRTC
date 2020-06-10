@@ -478,16 +478,16 @@ SimpleWebRTC.prototype.sendFile = function () {
 
 };
 
-SimpleWebRTC.prototype.getRoomParticipants = function (roomName, cb) {
+SimpleWebRTC.prototype.getRoomParticipants = function (cb) {
     var self = this;
-    this.connection.emit('getRoomParticipants', roomName, function (err, roomDescription) {
-        console.log('getRoomParticipants', roomName, err, roomDescription);
+    this.connection.emit('getRoomParticipants', self.roomName, function (err, roomDescription) {
+        console.log('getRoomParticipants', self.roomName, err, roomDescription);
         if (err) {
             self.emit('error', err);
         }
 
         if (cb) cb(err, roomDescription);
-        self.emit('roomParticipants', name);
+        self.emit('roomParticipants', roomDescription);
     });
 };
 
