@@ -24424,9 +24424,6 @@ function SimpleWebRTC(opts) {
         // self.webrtc.config.peerConnectionConfig.iceServers = self.webrtc.config.peerConnectionConfig.iceServers.concat(args);
         // self.emit('turnservers', args);
     });
-    connection.on('terminateClient', function (args) {
-        self.emit('terminateClient', args);
-    });
 
     this.webrtc.on('iceFailed', function (peer) {
         // local ice failure
