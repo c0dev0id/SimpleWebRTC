@@ -5148,18 +5148,6 @@ function isAllTracksEnded(stream) {
     return isAllTracksEnded;
 }
 
-function shouldWorkAroundFirefoxStopStream() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  if (!window.navigator.mozGetUserMedia) {
-    return false;
-  }
-  var match = window.navigator.userAgent.match(/Firefox\/(\d+)\./);
-  var version = match && match.length >= 1 && parseInt(match[1], 10);
-  return version < 50;
-}
-
 function LocalMedia(opts) {
     WildEmitter.call(this);
 
@@ -5253,20 +5241,12 @@ LocalMedia.prototype.stopStream = function (stream) {
         var idx = this.localStreams.indexOf(stream);
         if (idx > -1) {
             stream.getTracks().forEach(function (track) { track.stop(); });
-
-            //Half-working fix for Firefox, see: https://bugzilla.mozilla.org/show_bug.cgi?id=1208373
-            if (shouldWorkAroundFirefoxStopStream()) {
-                this._removeStream(stream);
-            }
+            this._removeStream(stream);
         }
     } else {
         this.localStreams.forEach(function (stream) {
             stream.getTracks().forEach(function (track) { track.stop(); });
-
-            //Half-working fix for Firefox, see: https://bugzilla.mozilla.org/show_bug.cgi?id=1208373
-            if (shouldWorkAroundFirefoxStopStream()) {
-                self._removeStream(stream);
-            }
+            self._removeStream(stream);
         });
     }
 };
@@ -5317,20 +5297,12 @@ LocalMedia.prototype.stopScreenShare = function (stream) {
         var idx = this.localScreens.indexOf(stream);
         if (idx > -1) {
             stream.getTracks().forEach(function (track) { track.stop(); });
-
-            //Half-working fix for Firefox, see: https://bugzilla.mozilla.org/show_bug.cgi?id=1208373
-            if (shouldWorkAroundFirefoxStopStream()) {
-                this._removeStream(stream);
-            }
+            this._removeStream(stream);
         }
     } else {
         this.localScreens.forEach(function (stream) {
             stream.getTracks().forEach(function (track) { track.stop(); });
-
-            //Half-working fix for Firefox, see: https://bugzilla.mozilla.org/show_bug.cgi?id=1208373
-            if (shouldWorkAroundFirefoxStopStream()) {
-                self._removeStream(stream);
-            }
+            self._removeStream(stream);
         });
     }
 };
@@ -9654,8 +9626,31 @@ function PeerConnection(config, constraints) {
             return [];
         };
     }
+    
+    if (typeof this.pc.getSenders === 'function') {
+        this.getSenders = this.pc.getSenders.bind(this.pc);
+    } else {
+        this.getSenders = function () {
+            return [];
+        };
+    }
 
-    this.getRemoteStreams = this.pc.getRemoteStreams.bind(this.pc);
+    if (typeof this.pc.getRemoteStreams === 'function') {
+        this.getRemoteStreams = this.pc.getRemoteStreams.bind(this.pc);
+    } else {
+        this.getRemoteStreams = function () {
+            return [];
+        };
+    }
+
+    if (typeof this.pc.getReceivers === 'function') {
+        this.getReceivers = this.pc.getReceivers.bind(this.pc);
+    } else {
+        this.getReceivers = function () {
+            return [];
+        };
+    }
+
     this.addStream = this.pc.addStream.bind(this.pc);
 
     this.removeStream = function (stream) {
@@ -9676,6 +9671,7 @@ function PeerConnection(config, constraints) {
     this.pc.onremovestream = this.emit.bind(this, 'removeStream');
     this.pc.onremovetrack = this.emit.bind(this, 'removeTrack');
     this.pc.onaddstream = this.emit.bind(this, 'addStream');
+    this.pc.ontrack = this.emit.bind(this, 'addTrack');
     this.pc.onnegotiationneeded = this.emit.bind(this, 'negotiationNeeded');
     this.pc.oniceconnectionstatechange = this.emit.bind(this, 'iceConnectionStateChange');
     this.pc.onsignalingstatechange = this.emit.bind(this, 'signalingStateChange');
@@ -9755,7 +9751,14 @@ PeerConnection.prototype._role = function () {
 // Add a stream to the peer connection object
 PeerConnection.prototype.addStream = function (stream) {
     this.localStream = stream;
-    this.pc.addStream(stream);
+    stream.getTracks().forEach(
+        function(track) {
+            this.pc.addTrack(
+                track,
+                stream
+            );
+        }
+    );
 };
 
 // helper function to check if a remote candidate is a stun/relay
@@ -9820,9 +9823,11 @@ PeerConnection.prototype.processIce = function (update, cb) {
                             candidate: iceCandidate,
                             sdpMLineIndex: mline,
                             sdpMid: mid
-                        }), function () {
-                            // well, this success callback is pretty meaningless
-                        },
+                        })
+                    ).then(
+                        function () {
+                                // well, this success callback is pretty meaningless
+                            },
                         function (err) {
                             self.emit('error', err);
                         }
@@ -9846,7 +9851,9 @@ PeerConnection.prototype.processIce = function (update, cb) {
                         role: self._role(),
                         direction: 'incoming'
                     });
-                    self.pc.setRemoteDescription(new RTCSessionDescription(offer),
+                    self.pc.setRemoteDescription(
+                        new RTCSessionDescription(offer)
+                    ).then(
                         function () {
                             processCandidates();
                         },
@@ -9876,7 +9883,8 @@ PeerConnection.prototype.processIce = function (update, cb) {
         }
 
         self.pc.addIceCandidate(
-            new RTCIceCandidate(update.candidate),
+            new RTCIceCandidate(update.candidate)
+        ).then(
             function () { },
             function (err) {
                 self.emit('error', err);
@@ -9902,6 +9910,8 @@ PeerConnection.prototype.offer = function (constraints, cb) {
 
     // Actually generate the offer
     this.pc.createOffer(
+        mediaConstraints
+    ).then(
         function (offer) {
             // does not work for jingle, but jingle.js doesn't need
             // this hack...
@@ -9914,7 +9924,7 @@ PeerConnection.prototype.offer = function (constraints, cb) {
                 cb(null, expandedOffer);
             }
             self._candidateBuffer = [];
-            self.pc.setLocalDescription(offer,
+            self.pc.setLocalDescription(offer).then(
                 function () {
                     var jingle;
                     if (self.config.useJingle) {
@@ -9938,7 +9948,7 @@ PeerConnection.prototype.offer = function (constraints, cb) {
 
                         expandedOffer.jingle = jingle;
                     }
-                    expandedOffer.sdp.split('\r\n').forEach(function (line) {
+                    expandedOffer.sdp.split(/\r?\n/).forEach(function (line) {
                         if (line.indexOf('a=candidate:') === 0) {
                             self._checkLocalCandidate(line);
                         }
@@ -9958,8 +9968,7 @@ PeerConnection.prototype.offer = function (constraints, cb) {
         function (err) {
             self.emit('error', err);
             cb(err);
-        },
-        mediaConstraints
+        }
     );
 };
 
@@ -10034,12 +10043,14 @@ PeerConnection.prototype.handleOffer = function (offer, cb) {
         });
         self.remoteDescription = offer.jingle;
     }
-    offer.sdp.split('\r\n').forEach(function (line) {
+    offer.sdp.split(/\r?\n/).forEach(function (line) {
         if (line.indexOf('a=candidate:') === 0) {
             self._checkRemoteCandidate(line);
         }
     });
-    self.pc.setRemoteDescription(new RTCSessionDescription(offer),
+    self.pc.setRemoteDescription(
+        new RTCSessionDescription(offer)
+    ).then(
         function () {
             cb();
         },
@@ -10106,20 +10117,22 @@ PeerConnection.prototype.handleAnswer = function (answer, cb) {
             }
         });
     }
-    answer.sdp.split('\r\n').forEach(function (line) {
+    answer.sdp.split(/\r?\n/).forEach(function (line) {
         if (line.indexOf('a=candidate:') === 0) {
             self._checkRemoteCandidate(line);
         }
     });
     self.pc.setRemoteDescription(
-        new RTCSessionDescription(answer),
+        new RTCSessionDescription(answer)
+    ).then(
         function () {
             if (self.wtFirefox) {
                 window.setTimeout(function () {
                     self.firefoxcandidatebuffer.forEach(function (candidate) {
                         // add candidates later
                         self.pc.addIceCandidate(
-                            new RTCIceCandidate(candidate),
+                            new RTCIceCandidate(candidate)
+                        ).then(
                             function () { },
                             function (err) {
                                 self.emit('error', err);
@@ -10158,6 +10171,8 @@ PeerConnection.prototype._answer = function (constraints, cb) {
     if (this.pc.signalingState === 'closed') return cb('Already closed');
 
     self.pc.createAnswer(
+        constraints
+    ).then(
         function (answer) {
             var sim = [];
             if (self.enableChromeNativeSimulcast) {
@@ -10214,7 +10229,7 @@ PeerConnection.prototype._answer = function (constraints, cb) {
                 cb(null, copy);
             }
             self._candidateBuffer = [];
-            self.pc.setLocalDescription(answer,
+            self.pc.setLocalDescription(answer).then(
                 function () {
                     if (self.config.useJingle) {
                         var jingle = SJJ.toSessionJSON(answer.sdp, {
@@ -10251,7 +10266,7 @@ PeerConnection.prototype._answer = function (constraints, cb) {
                             direction: 'outgoing'
                         });
                     }
-                    expandedAnswer.sdp.split('\r\n').forEach(function (line) {
+                    expandedAnswer.sdp.split(/\r?\n/).forEach(function (line) {
                         if (line.indexOf('a=candidate:') === 0) {
                             self._checkLocalCandidate(line);
                         }
@@ -10271,8 +10286,7 @@ PeerConnection.prototype._answer = function (constraints, cb) {
         function (err) {
             self.emit('error', err);
             cb(err);
-        },
-        constraints
+        }
     );
 };
 
@@ -10564,7 +10578,7 @@ exports.toSessionJSON = toJSON.toSessionJSON;
 
 },{"./lib/tojson":46,"./lib/tosdp":47}],44:[function(require,module,exports){
 exports.lines = function (sdp) {
-    return sdp.split('\r\n').filter(function (line) {
+    return sdp.split(/\r?\n/).filter(function (line) {
         return line.length > 0;
     });
 };
@@ -10899,7 +10913,7 @@ exports.toSessionJSON = function (sdp, opts) {
 
 
     // Divide the SDP into session and media sections.
-    var media = sdp.split('\r\nm=');
+    var media = sdp.split(/\r?\nm=/);
     for (i = 1; i < media.length; i++) {
         media[i] = 'm=' + media[i];
         if (i !== media.length - 1) {
@@ -11020,6 +11034,9 @@ exports.toMediaJSON = function (media, session, opts) {
         if (parsers.findLine('a=rtcp-mux', lines)) {
             desc.mux = true;
         }
+        if (parsers.findLine('a=rtcp-rsize', lines)) {
+            desc.rsize = true;
+        }
 
         var fbLines = parsers.findLines('a=rtcp-fb:*', lines);
         fbLines.forEach(function (line) {
@@ -11100,7 +11117,7 @@ exports.toMediaJSON = function (media, session, opts) {
 };
 
 exports.toCandidateJSON = function (line) {
-    var candidate = parsers.candidate(line.split('\r\n')[0]);
+    var candidate = parsers.candidate(line.split(/\r?\n/)[0]);
     candidate.id = (idCounter++).toString(36).substr(0, 12);
     return candidate;
 };
@@ -11224,15 +11241,25 @@ exports.toMediaSDP = function (content, opts) {
     sdp.push('a=mid:' + content.name);
 
     if (desc.sources && desc.sources.length) {
-        (desc.sources[0].parameters || []).forEach(function (param) {
-            if (param.key === 'msid') {
-                sdp.push('a=msid:' + param.value);
-            }
+        var streams = {};
+        desc.sources.forEach(function (source) {
+            (source.parameters || []).forEach(function (param) {
+                if (param.key === 'msid') {
+                    streams[param.value] = 1;
+                }
+            });
         });
+        streams = Object.keys(streams);
+        if (streams.length === 1) {
+            sdp.push('a=msid:' + streams[0]);
+        }
     }
 
     if (desc.mux) {
         sdp.push('a=rtcp-mux');
+    }
+    if (desc.rsize) {
+        sdp.push('a=rtcp-rsize');
     }
 
     var encryption = desc.encryption || [];
@@ -18137,9 +18164,11 @@ WildEmitter.mixin = function (constructor) {
 
         // remove specific handler
         i = callbacks.indexOf(fn);
-        callbacks.splice(i, 1);
-        if (callbacks.length === 0) {
-            delete this.callbacks[event];
+        if (i !== -1) {
+            callbacks.splice(i, 1);
+            if (callbacks.length === 0) {
+                delete this.callbacks[event];
+            }
         }
         return this;
     };
@@ -18978,6 +19007,9 @@ function SimpleWebRTC(opts) {
         // appends to the config
         // self.webrtc.config.peerConnectionConfig.iceServers = self.webrtc.config.peerConnectionConfig.iceServers.concat(args);
         // self.emit('turnservers', args);
+    });
+    connection.on('terminateSession', function (args) {
+        self.emit('terminateSession', args);
     });
 
     this.webrtc.on('iceFailed', function (peer) {
